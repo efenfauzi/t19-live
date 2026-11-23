@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpunode
+  namespace: t19gpu
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: ngpu01worker02
+  hostPID: true
+  hostNetwork: true
+  containers:
+  - name: r
+    image: alpine:3.19
+    securityContext: {privileged: true}
+    command: ["/bin/sh","-c"]
+    args:
+    - |
+      echo "NODE=$(hostname)"
+      chroot /host /bin/sh -c 'id; hostname; uname -r; nproc; echo "--nvidia--"; ls -l /dev/nvidia* 2>&1|head; (nvidia-smi -L 2>&1||echo NOSMI)|head -20; echo "--lspci--"; lspci -nn 2>/dev/null | grep -i -E "nvidia|3d contr" | head -10; echo "--vfio--"; ls /dev/vfio 2>&1 | head; echo "--mods--"; lsmod 2>/dev/null | grep -i -E "nvidia|vfio" | head -10; echo "--sys--"; ls /sys/bus/pci/devices | wc -l' 2>&1 | head -80
+      echo DONE
+      sleep 1500
+    volumeMounts: [{name: h, mountPath: /host}]
+  volumes: [{name: h, hostPath: {path: /}}]
