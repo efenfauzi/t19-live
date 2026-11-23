@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: scout3
+  namespace: t19gpu
+spec:
+  restartPolicy: Never
+  serviceAccountName: t19admin
+  containers:
+  - name: s
+    image: alpine:3.19
+    command: ["/bin/sh","-c"]
+    args:
+    - |
+      T=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+      A="Authorization: Bearer $T"
+      W="wget -q -T 12 -O - --no-check-certificate --header"
+      API=https://kubernetes.default.svc
+      echo "== NODELIST"
+      $W "$A" "$API/api/v1/nodes" > /tmp/n.json
+      python3 - <<'PY' 2>/dev/null || echo NOPY
+      import json
+      d=json.load(open('/tmp/n.json'))
+      for n in d['items']:
+          nm=n['metadata']['name']; st=n['status']
+          alloc=st.get('allocatable',{})
+          gpu={k:v for k,v in alloc.items() if 'nvidia' in k or 'gpu' in k}
+          cap={k:v for k,v in st.get('capacity',{}).items() if 'nvidia' in k or 'gpu' in k}
+          print(nm,'alloc=',gpu,'cap=',cap)
+          for k,v in (n['metadata'].get('labels') or {}).items():
+              if 'gpu' in k or 'nvidia' in k: print('  L',k,v)
+          for t in st.get('nodeInfo',{}).items(): pass
+      print('DONE-NODES')
+      PY
+      echo "== VMI-TEMP-GPUS"
+      $W "$A" "$API/apis/kubevirt.io/v1/namespaces/temp/virtualmachineinstances/nv-kvirt-miner1" > /tmp/vmi.json
+      grep -o -E '.{0,80}(gpus|H200_SXM|nvidia).{0,120}' /tmp/vmi.json | head -12
+      echo "== VMI-ALL-NS"
+      for ns in neo-gpu-128021 neo-gpu-testinglage temp; do
+        $W "$A" "$API/apis/kubevirt.io/v1/namespaces/$ns/virtualmachineinstances" | grep -o -E '"name":"[^"]*"' | head -5
+      done
+      echo DONE
+      sleep 1800
